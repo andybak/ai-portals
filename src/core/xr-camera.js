@@ -9,8 +9,8 @@ export function setXRProjection(camera, projection) {
 }
 
 // Give world updates a standalone camera for the combined stereo frustum.
-// Its local transform is also its world transform, so camera-facing effects can
-// safely call getWorldDirection/getWorldQuaternion without losing the rig pose.
+// Worlds access this as camera.viewCamera for visibility checks. The camera
+// passed to update() retains the flight pose for authored motion and placement.
 export function copyXRView(camera, combined) {
   combined.matrixWorld.decompose(camera.position, camera.quaternion, camera.scale);
   camera.updateMatrixWorld(true);

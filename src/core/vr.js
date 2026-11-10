@@ -12,6 +12,7 @@ export function setupVR(engine) {
   xr.setFramebufferScaleFactor(1);
   const rig = new THREE.Group(), base = new THREE.PerspectiveCamera();
   const viewCamera = new THREE.PerspectiveCamera();
+  const portalViewCamera = new THREE.PerspectiveCamera();
   rig.add(base);
   const copy = new FullScreenQuad(new THREE.ShaderMaterial({
     uniforms: { image: { value: null } }, depthTest: false, depthWrite: false,
@@ -86,9 +87,13 @@ export function setupVR(engine) {
       if (engine.portalRT.width !== width || engine.portalRT.height !== height) engine.portalRT.setSize(width, height);
       let drew = false;
       try {
-        // Update the destination once using the combined tracked view. Per-eye
-        // portal renders below must not advance its animation or recull its groups.
-        if (B && (A.feed || engine.reveal > 0.002)) engine._renderPortal(A, B, dt, viewCamera, true, false);
+        // Prepare tracked visibility separately from the authored portal camera.
+        // The destination's motion still follows the flight, once per frame.
+        if (B && (A.feed || engine.reveal > 0.002)) {
+          engine._renderPortal(A, B, 0, viewCamera, false, false);
+          copyXRView(portalViewCamera, engine.portalCam);
+          engine._renderPortal(A, B, dt, engine.camera, true, false, portalViewCamera);
+        }
         for (const [index, eye] of eyes.entries()) {
           // updateCamera already composed the flight rig with the tracked pose.
           // Rendering an unparented eye must not replace that world transform.
