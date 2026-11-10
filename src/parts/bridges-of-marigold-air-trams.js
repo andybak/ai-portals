@@ -1,0 +1,21 @@
+import{HANG as T,FOG_VERT_PARS as M,FOG_VERT as P,FOG_FRAG_PARS as _}from"./bridges-of-marigold-air-glsl.js";import{fogUniforms as G}from"../kit/fx.js";import{linePoint as F,CAR_DROP as C}from"./bridges-of-marigold-air-lines.js";const B=`
+${M}${T}
+attribute vec3 aTan; attribute vec4 aHang; attribute vec2 aW; uniform float uTime, uPx;
+void main(){
+  vec3 c = mgHang(position, aHang, uTime), toEye = cameraPosition - c; float dist = max(length(toEye), 1e-3);
+  vec3 s = cross(aTan, toEye/dist); s /= max(length(s), 1e-4);
+  vec4 mvPosition = viewMatrix*vec4(c + s*(aW.x*max(aW.y, uPx*dist*0.75)), 1.); gl_Position = projectionMatrix*mvPosition;
+${P} }`,N=`
+${_}
+uniform vec3 uCord; void main(){ gl_FragColor = vec4(fxApplyFog(uCord), 1.); }`,R=`
+${M}
+attribute vec4 aTint; varying vec4 vTint; varying vec3 vN;
+void main(){ vTint = aTint; vN = normalize(mat3(modelMatrix)*normal); vec4 mvPosition = modelViewMatrix*vec4(position, 1.); gl_Position = projectionMatrix*mvPosition;
+${P} }`,k=`
+${_}
+uniform vec3 uSky, uWarm, uLamp; varying vec4 vTint; varying vec3 vN;
+void main(){
+  vec3 n = normalize(vN); float up = n.y*0.5 + 0.5;
+  vec3 col = vTint.rgb*(mix(uWarm, uSky, up)*0.9 + 0.05) + uLamp*vTint.a;
+  gl_FragColor = vec4(fxApplyFog(col), 1.);
+}`;function O(c,S){const h=[],A=[],b=[],l=[],y=[];for(const r of S){const d=h.length/3,o=r.kind==="tram"?.05:r.kind==="cable"?.03:.018;for(let u=0;u<=16;u++){const v=u/16,g=F(r,v),s=F(r,Math.max(0,v-.02)),w=F(r,Math.min(1,v+.02)),x=w[0]-s[0],t=w[1]-s[1],a=w[2]-s[2],f=Math.hypot(x,t,a)||1;for(const e of[-1,1])h.push(g[0],g[1],g[2]),A.push(x/f,t/f,a/f),b.push(r.px,r.pz,r.sway*4*v*(1-v),r.phase),l.push(e,o);if(u<16){const e=d+u*2;y.push(e,e+1,e+2,e+1,e+3,e+2)}}}const i=new c.BufferGeometry;return i.setAttribute("position",new c.Float32BufferAttribute(h,3)),i.setAttribute("aTan",new c.Float32BufferAttribute(A,3)),i.setAttribute("aHang",new c.Float32BufferAttribute(b,4)),i.setAttribute("aW",new c.Float32BufferAttribute(l,2)),i.setIndex(y),i}function W(c,S){const n=[],h=[],A=[],b=[],l=(o,u,v,g,s,w,x,t)=>{const a=new c.BoxGeometry(u-o,g-v,w-s).translate((o+u)/2,(v+g)/2,(s+w)/2),f=n.length/3,e=a.attributes.position.array,m=a.attributes.normal.array;for(let p=0;p<e.length;p+=3)n.push(e[p],e[p+1],e[p+2]),h.push(m[p],m[p+1],m[p+2]),A.push(x[0],x[1],x[2],t);for(let p=0;p<a.index.count;p++)b.push(f+a.index.getX(p));a.dispose()},y=[.62,.54,.4],i=[.05,.045,.06],r=[.9,.62,.3];l(-1.8,1.8,-1.15,.75,-1,1,S,0),l(-1.95,1.95,.75,.97,-1.15,1.15,y,0);for(const o of[-1.02,.98])l(-1.5,1.5,-.15,.6,o,o+.04,r,1);for(const o of[-1.05,1])for(const u of[-.75,0,.75])l(u-.05,u+.05,-.2,.65,o,o+.05,S,0);for(const o of[-1.83,1.79])l(o,o+.04,-.15,.6,-.7,.7,r,1);l(-.08,.08,.97,C-.1,-.08,.08,i,0),l(-.6,.6,C-.16,C+.14,-.18,.18,i,0);for(const o of[-1.9,1.78])l(o,o+.12,-1,-.78,-.12,.12,r,2.2);const d=new c.BufferGeometry;return d.setAttribute("position",new c.Float32BufferAttribute(n,3)),d.setAttribute("normal",new c.Float32BufferAttribute(h,3)),d.setAttribute("aTint",new c.Float32BufferAttribute(A,4)),d.setIndex(b),d.computeBoundingSphere(),d}async function D(c,S){const{THREE:n,U:h,H:A,lines:b,westShare:l}=S,y=new n.Group,i=[],r=O(n,b);i.push(r);const d=new n.ShaderMaterial({fog:!0,side:n.DoubleSide,vertexShader:B,fragmentShader:N,uniforms:{...G(),uTime:h.uTime,uPx:h.uPx,uCord:{value:new n.Color("#2a2036")}}});i.push(d);const o=new n.Mesh(r,d);o.frustumCulled=!1,y.add(o),await c.yield();const u=new n.ShaderMaterial({fog:!0,vertexShader:R,fragmentShader:k,uniforms:{...G(),uSky:{value:new n.Color(A.fillSky).multiplyScalar(.55)},uWarm:{value:new n.Color("#ff9a4a").multiplyScalar(.5)},uLamp:{value:new n.Color("#ffb060").multiplyScalar(2.4)}}});i.push(u);const v=[[.05,.42,.4],[.62,.09,.05],[.6,.38,.04]],g=b.filter(t=>t.kind==="tram"),s=[];g.forEach((t,a)=>{const f=W(n,v[a%3]);i.push(f);const e=new n.Mesh(f,u);e.rotation.y=Math.atan2(-(t.b[2]-t.a[2]),t.b[0]-t.a[0]),y.add(e),s.push({l:t,m:e,period:2*.8*t.len/2.1,phase:a*2.4})});const w=(t,a,f)=>t===0?l(f):.5-.4*Math.cos(6.2832*a/s[t].period+s[t].phase),x=(t,a,f,e)=>{const m=F(s[t].l,w(t,a,f));return e.set(m[0],m[1]-C,m[2])};return{object:y,triangles:r.index.count/3+s.length*192,drawCalls:1+s.length,carAt:x,cables:g,update(t,a,f,e){for(let m=0;m<s.length;m++)x(m,a,e,s[m].m.position)},dispose(){for(const t of i)t.dispose()}}}export{D as buildTrams};
