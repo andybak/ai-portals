@@ -23,3 +23,12 @@ export function copyXRView(camera, combined) {
   camera.aspect = e[5] / e[0];
   return camera;
 }
+
+// Nested render hooks restore camera.viewport. Offscreen eye buffers start at
+// (0, 0), regardless of the eye's placement in the headset framebuffer.
+export function copyXREyeView(camera, eye) {
+  copyXRView(camera, eye);
+  camera.layers.mask = eye.layers.mask;
+  camera.viewport.set(0, 0, eye.viewport.z, eye.viewport.w);
+  return camera;
+}

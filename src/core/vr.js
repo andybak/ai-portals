@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { Post } from './post.js';
-import { copyXRView } from './xr-camera.js';
+import { copyXRView, copyXREyeView } from './xr-camera.js';
 
 // The flight is the rig; tracked head motion is local to it. No input sources or
 // DOM overlay are requested. Each eye gets its own portal and postprocessed view.
@@ -26,9 +26,11 @@ export function setupVR(engine) {
   navigator.xr.isSessionSupported('immersive-vr').then((ok) => { button.hidden = !ok; }).catch(() => {});
   let savedPaused = false, firstFrame = false;
   const eyePosts = [];
+  const eyeCameras = [];
   const restoreBuffers = () => {
     for (const eyePost of eyePosts) eyePost.dispose();
     eyePosts.length = 0;
+    eyeCameras.length = 0;
     engine.portalRT.setSize(Math.floor(engine.w * engine.pr), Math.floor(engine.h * engine.pr));
   };
   button.addEventListener('click', async () => {
@@ -95,10 +97,13 @@ export function setupVR(engine) {
           engine._renderPortal(A, B, dt, engine.camera, true, false, portalViewCamera);
         }
         for (const [index, eye] of eyes.entries()) {
-          // updateCamera already composed the flight rig with the tracked pose.
-          // Rendering an unparented eye must not replace that world transform.
-          eye.matrixWorldAutoUpdate = false;
           const v = eye.viewport;
+          let camera = eyeCameras[index];
+          if (!camera) {
+            camera = eyeCameras[index] = new THREE.PerspectiveCamera();
+            camera.viewport = new THREE.Vector4();
+          }
+          copyXREyeView(camera, eye);
           let eyePost = eyePosts[index];
           if (!eyePost) eyePost = eyePosts[index] = new Post(r, v.z, v.w, 1, engine.samples, engine.rtType);
           else if (eyePost.composer.readBuffer.width !== v.z || eyePost.composer.readBuffer.height !== v.w) eyePost.setSize(v.z, v.w, 1);
@@ -113,11 +118,11 @@ export function setupVR(engine) {
           const dewash = B ? (engine.opts.dewash ?? A.portalSpec.dewash ?? (A.feed ? 0 : 0.85)) : 0;
           A.portal.setDewash(eyePost.bloomTexture, dewash);
           if (B && (A.feed || engine.reveal > 0.002)) {
-            const rendered = engine._renderPortal(A, B, dt, eye, false);
+            const rendered = engine._renderPortal(A, B, dt, camera, false);
             drew ||= rendered;
             if (rendered && dewash > 0) A.portal.setDewash(eyePost.bloomTexture, dewash * (1 - THREE.MathUtils.smoothstep(engine.rimIn, 0.8, 1.2)));
           }
-          eyePost.render(A.scene, eye, engine.postNow, engine.time, engine.fade);
+          eyePost.render(A.scene, camera, engine.postNow, engine.time, engine.fade);
           copy.material.uniforms.image.value = eyePost.composer.readBuffer.texture;
           target.viewport.copy(v);
           r.setRenderTarget(target);
