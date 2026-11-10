@@ -689,7 +689,7 @@ export class Engine {
   // camera matrix in its own space) or portal.feedFov, by that one. The last 3 m are the engine's again, so every
   // crossing is the exact window. A world that has read ctx.portalView is told where the picture is in the buffer
   // (rect) and how to find a point of its own space in it (matrix).
-  _renderPortal(A, B, dt, cam = this.camera, update = true) {
+  _renderPortal(A, B, dt, cam = this.camera, update = true, draw = true) {
     const P = A.portal, rim = P.rim, G = P.group.matrixWorld, feed = A.feed;
     let minX = 1, maxX = -1, minY = 1, maxY = -1, minDepth = Infinity, behind = false, fit = 0, cx = 0, cy = 0, rimIn = Infinity;
     for (let i = rim.length - 1; i >= 0; i--) {                 // the last rim point is the centre: it comes first
@@ -775,6 +775,7 @@ export class Engine {
     // (on a pause a world that has been updated once stands as it was last drawn: see frame())
     if (update && !(B._ran && this.settings.paused && !this.opts.freeze)) { B._ran = true; try { B.world.update?.(dt, B.time, pc, 0); } catch (e) { if (!B._err) { B._err = 1; console.error(e); } } }
     if (B.feed) B.portal.group.visible = B.world.portal.show !== false;
+    if (!draw) return true;   // update-only: the combined XR view culls once for both eyes
     const rt = this._feedBuf(A); if (rt === A.feedRT) this._fitFeed(A);
     const W = rt.width, H = rt.height, pad = 3;
     let x0 = 0, x1 = W, y0 = 0, y1 = H;
@@ -914,6 +915,8 @@ export class Engine {
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld(true);
 
+    const viewingCamera = this.renderer.xr.isPresenting && this.vr ? this.vr.prepareView(cam) : cam;
+
     if (A.goFull && !A.full) { A.full = true; A.portal.setTexture(this.portalRT.texture); }   // a feed grown large: see _feedBuf
     // ctx.portalView for the world's update(): the texture is the real one only while it holds a picture of the next
     // world (a feed world's is drawn below, before the world itself; another world's was drawn last frame)
@@ -924,11 +927,11 @@ export class Engine {
     // nought is how the still page asks for a settled picture, and much code answers it by letting every eased value jump
     // to its target: on a pause that showed as wheels, smoke, flocks and lights hopping in the first paused frame.)
     const stand = this.settings.paused && !frozen;
-    if (!(stand && A._ran)) { A._ran = true; try { A.world.update?.(dt, A.time, cam, u); } catch (e) { if (!A._err) { A._err = 1; console.error(e); this.events.status({ error: A.def.id + ' update: ' + e.message }); } } }
+    if (!(stand && A._ran)) { A._ran = true; try { A.world.update?.(dt, A.time, viewingCamera, u); } catch (e) { if (!A._err) { A._err = 1; console.error(e); this.events.status({ error: A.def.id + ' update: ' + e.message }); } } }
     if (A.feed) A.portal.group.visible = remaining < 3 || A.world.portal.show !== false;   // the last metres are the crossing's
     else if (A.drawWithin != null) { A.portal.group.visible = remaining <= A.drawWithin; if (A.drawIn) A.portal.setGrow(0.04 + 0.96 * smoothstep(0, A.drawIn, A.drawWithin - remaining)); }
     A.portal.setTime(this.time); A.portal.setReveal(this.reveal); A.portal.setNear?.(1 - smoothstep(4, 30, remaining));
-    this.extras.update(dt, A, B, cam, u, remaining, this.speed, stand);
+    this.extras.update(dt, A, B, viewingCamera, u, remaining, this.speed, stand);
     this.style.update(dt, A, u, frozen);
 
     this.renderer.info.reset();

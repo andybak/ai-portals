@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { Post } from './post.js';
+import { copyXRView } from './xr-camera.js';
 
 // The flight is the rig; tracked head motion is local to it. No input sources or
 // DOM overlay are requested. Each eye gets its own portal and postprocessed view.
@@ -10,6 +11,7 @@ export function setupVR(engine) {
   xr.setReferenceSpaceType('local');
   xr.setFramebufferScaleFactor(1);
   const rig = new THREE.Group(), base = new THREE.PerspectiveCamera();
+  const viewCamera = new THREE.PerspectiveCamera();
   rig.add(base);
   const copy = new FullScreenQuad(new THREE.ShaderMaterial({
     uniforms: { image: { value: null } }, depthTest: false, depthWrite: false,
@@ -62,15 +64,19 @@ export function setupVR(engine) {
     console.info('[PortalsXR] Session ended; desktop rendering restored');
   });
   engine.vr = {
+    prepareView(flightCamera) {
+      rig.position.copy(flightCamera.position); rig.quaternion.copy(flightCamera.quaternion);
+      rig.updateMatrixWorld(true);
+      base.near = flightCamera.near; base.far = flightCamera.far;
+      xr.updateCamera(base);
+      // WebXRManager's combined camera encloses both eye frusta, including IPD.
+      return copyXRView(viewCamera, xr.getCamera());
+    },
     render(A, B, dt) {
       const target = r.getRenderTarget();
       if (!target) return;
       const started = performance.now();
       const viewport = target.viewport.clone();
-      rig.position.copy(engine.camera.position); rig.quaternion.copy(engine.camera.quaternion);
-      rig.updateMatrixWorld(true);
-      base.near = engine.camera.near; base.far = engine.camera.far;
-      xr.updateCamera(base);
       const eyes = xr.getCamera().cameras;
       if (!eyes.length) return;
       // The shared portal texture can serve different eye sizes without being
@@ -78,8 +84,11 @@ export function setupVR(engine) {
       const width = Math.max(...eyes.map((eye) => eye.viewport.z));
       const height = Math.max(...eyes.map((eye) => eye.viewport.w));
       if (engine.portalRT.width !== width || engine.portalRT.height !== height) engine.portalRT.setSize(width, height);
-      let updated = false, drew = false;
+      let drew = false;
       try {
+        // Update the destination once using the combined tracked view. Per-eye
+        // portal renders below must not advance its animation or recull its groups.
+        if (B && (A.feed || engine.reveal > 0.002)) engine._renderPortal(A, B, dt, viewCamera, true, false);
         for (const [index, eye] of eyes.entries()) {
           // updateCamera already composed the flight rig with the tracked pose.
           // Rendering an unparented eye must not replace that world transform.
@@ -99,8 +108,8 @@ export function setupVR(engine) {
           const dewash = B ? (engine.opts.dewash ?? A.portalSpec.dewash ?? (A.feed ? 0 : 0.85)) : 0;
           A.portal.setDewash(eyePost.bloomTexture, dewash);
           if (B && (A.feed || engine.reveal > 0.002)) {
-            const rendered = engine._renderPortal(A, B, dt, eye, !updated);
-            updated ||= rendered; drew ||= rendered;
+            const rendered = engine._renderPortal(A, B, dt, eye, false);
+            drew ||= rendered;
             if (rendered && dewash > 0) A.portal.setDewash(eyePost.bloomTexture, dewash * (1 - THREE.MathUtils.smoothstep(engine.rimIn, 0.8, 1.2)));
           }
           eyePost.render(A.scene, eye, engine.postNow, engine.time, engine.fade);

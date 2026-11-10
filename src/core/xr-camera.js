@@ -7,3 +7,19 @@ export function setXRProjection(camera, projection) {
   e[14] = far === Infinity ? -2 * near : -2 * far * near / (far - near);
   camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 }
+
+// Give world updates a standalone camera for the combined stereo frustum.
+// Its local transform is also its world transform, so camera-facing effects can
+// safely call getWorldDirection/getWorldQuaternion without losing the rig pose.
+export function copyXRView(camera, combined) {
+  combined.matrixWorld.decompose(camera.position, camera.quaternion, camera.scale);
+  camera.updateMatrixWorld(true);
+  camera.projectionMatrix.copy(combined.projectionMatrix);
+  camera.projectionMatrixInverse.copy(combined.projectionMatrixInverse);
+  const e = camera.projectionMatrix.elements;
+  camera.near = e[14] / (e[10] - 1);
+  camera.far = e[10] === -1 ? Infinity : e[14] / (e[10] + 1);
+  camera.fov = 2 * Math.atan(1 / e[5]) * 180 / Math.PI;
+  camera.aspect = e[5] / e[0];
+  return camera;
+}
