@@ -34,7 +34,7 @@ The result is in `dist`, plain static files that any web host can serve, and the
 
 ## WebXR
 
-In Chrome with a connected VR headset, choose **Enter VR**. The journey keeps
+In a WebXR-capable browser with a connected VR headset, choose **Enter VR**. The journey keeps
 playing automatically and you can look around freely. There are no controls or
 UI inside VR; use the headset's system menu to exit. The entry button appears
 only when the browser reports immersive VR support. WebXR requires HTTPS or
