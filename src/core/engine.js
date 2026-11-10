@@ -2,6 +2,7 @@
 // swaps worlds at the crossing, and keeps doing that forever.
 import * as THREE from 'three';
 import { Post, normalizePost, blendPost, POST_DEFAULTS } from './post.js';
+import { setXRProjection } from './xr-camera.js';
 import { Portal } from './portal.js';
 import { installSafeMath } from './safemath.js';
 import { TIERS, QUALITY_LEVELS, Governor, guessTier, ratioFor, fovFor, isMobile } from './quality.js';
@@ -764,12 +765,8 @@ export class Engine {
     // camera.nearThrough on the next world: draw it from that near distance, so its ground or sea in front of its entry is
     // in the picture (for a path that starts lower above the surface than the opening is tall); otherwise from the opening's nearest point
     pc.near = pose ? B.cam.near : B.cam.nearThrough != null ? B.cam.nearThrough : Math.max(B.cam.near, minDepth * 0.96);
-    pc.updateProjectionMatrix();
-    // Headsets supply asymmetric eye projections; keep those for the portal too.
-    if (this.renderer.xr.isPresenting) {
-      pc.projectionMatrix.copy(cam.projectionMatrix);
-      pc.projectionMatrixInverse.copy(pc.projectionMatrix).invert();
-    }
+    if (this.renderer.xr.isPresenting) setXRProjection(pc, cam.projectionMatrix);
+    else pc.updateProjectionMatrix();
     P.setNextView(_C.premultiply(pc.projectionMatrix));
     const V = A.view.used ? A.view : null;
     if (V) V.matrix.multiplyMatrices(_C, A.exitInv);
